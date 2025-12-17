@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Job Tracker | Cloud</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: { 
+                extend: { 
+                    colors: { 
+                        notion: { bg: '#FFFFFF', darkbg: '#191919', hover: '#F1F1EF', darkhover: '#282828', border: '#E9E9E7', darkborder: '#2F2F2F', text: '#37352F', darktext: '#D4D4D4', gray: '#787774', darkgray: '#9B9A97' } 
+                    } 
+                } 
+            }
+        }
+    </script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-thumb { background: #E1E1E1; border-radius: 4px; }
+        .dark ::-webkit-scrollbar-thumb { background: #3A3A3A; }
+    </style>
+</head>
+<body class="bg-notion-bg text-notion-text dark:bg-notion-darkbg dark:text-notion-darktext transition-colors h-screen flex flex-col overflow-hidden">
+
+    <div class="sticky top-0 z-40 bg-notion-bg/95 dark:bg-notion-darkbg/95 backdrop-blur-sm border-b border-notion-border dark:border-notion-darkborder px-8 md:px-12 py-3 shrink-0">
+        <div class="max-w-[1200px] mx-auto flex justify-between items-center">
+            <div class="flex items-center gap-2">
+                <span class="text-2xl">💼</span>
+                <h1 class="text-xl font-bold">Cloud Job Tracker</h1>
+                <div id="sync-indicator" class="w-2 h-2 rounded-full bg-green-500 animate-pulse ml-2"></div>
+            </div>
+            <div class="flex gap-2 text-sm">
+                <button onclick="exportToPDF()" class="px-3 py-1.5 hover:bg-notion-hover dark:hover:bg-notion-darkhover rounded transition text-notion-gray">Export PDF</button>
+                <button onclick="toggleTheme()" class="px-3 py-1.5 hover:bg-notion-hover dark:hover:bg-notion-darkhover rounded transition">🌗</button>
+                <button onclick="openModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded font-medium shadow-sm">+ New Entry</button>
+            </div>
+        </div>
+    </div>
+
+    <main class="flex-1 overflow-auto px-8 md:px-12 py-6">
+        <div class="max-w-[1200px] mx-auto">
+            <div class="border border-notion-border dark:border-notion-darkborder rounded-lg overflow-hidden">
+                <table class="min-w-full divide-y divide-notion-border dark:divide-notion-darkborder">
+                    <thead class="bg-notion-bg dark:bg-notion-darkbg sticky top-0">
+                        <tr class="text-left text-xs text-notion-gray uppercase tracking-wider">
+                            <th class="px-4 py-3 w-48 border-r dark:border-notion-darkborder">🏢 Company</th>
+                            <th class="px-4 py-3 w-48 border-r dark:border-notion-darkborder">👨‍💻 Position</th>
+                            <th class="px-4 py-3 w-32 border-r dark:border-notion-darkborder">📊 Status</th>
+                            <th class="px-4 py-3 w-32 border-r dark:border-notion-darkborder">📅 Date</th>
+                            <th class="px-4 py-3 w-32 border-r dark:border-notion-darkborder">💰 Salary</th>
+                            <th class="px-4 py-3">📝 Remark</th>
+                        </tr>
+                    </thead>
+                    <tbody id="job-list" class="divide-y divide-notion-border dark:divide-notion-darkborder">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <footer class="border-t border-notion-border dark:border-notion-darkborder bg-notion-bg dark:bg-notion-darkbg px-8 md:px-12 py-2 text-xs text-notion-gray flex gap-8">
+        <div>Count <span id="footer-count" class="text-notion-text dark:text-white font-medium ml-1">0</span></div>
+        <div>Max Salary <span id="footer-max" class="text-notion-text dark:text-white font-medium ml-1">€0</span></div>
+    </footer>
+
+    <div id="modal" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-[#202020] w-full max-w-lg rounded-xl shadow-2xl border border-notion-border dark:border-notion-darkborder">
+            <form id="job-form" onsubmit="handleFormSubmit(event)" class="p-6 space-y-4">
+                <input type="hidden" id="edit-id">
+                <input type="text" id="company" placeholder="Company Name" required class="w-full bg-transparent border-b border-gray-200 dark:border-gray-700 px-1 py-2 outline-none text-xl font-bold focus:border-blue-500">
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <input type="text" id="position" placeholder="Position" required class="bg-gray-50 dark:bg-notion-darkhover rounded px-3 py-2 outline-none text-sm">
+                    <input type="number" id="salary" placeholder="Salary (Annual)" class="bg-gray-50 dark:bg-notion-darkhover rounded px-3 py-2 outline-none text-sm">
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <select id="status" class="bg-gray-50 dark:bg-notion-darkhover rounded px-3 py-2 outline-none text-sm">
+                        <option value="Applied">Applied</option>
+                        <option value="Interviewed">Interviewed</option>
+                        <option value="Offer">Offer</option>
+                        <option value="Rejected">Rejected</option>
+                    </select>
+                    <input type="date" id="date" required class="bg-gray-50 dark:bg-notion-darkhover rounded px-3 py-2 outline-none text-sm">
+                </div>
+
+                <select id="remark" class="w-full bg-gray-50 dark:bg-notion-darkhover rounded px-3 py-2 outline-none text-sm">
+                    <option value="">No Remark</option>
+                    <option value="Waiting">Waiting</option>
+                    <option value="Declined">Declined</option>
+                </select>
+
+                <div class="pt-4 flex justify-end gap-2">
+                    <button type="button" onclick="closeModal()" class="px-4 py-2 text-sm">Cancel</button>
+                    <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700">Save to Cloud</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        // --- PASTE YOUR FIREBASE CONFIG HERE ---
+        const firebaseConfig = {
+  apiKey: "AIzaSyBlN7lZqqpyST39tZBA_xRpBk5gETY63CQ",
+  authDomain: "job-tracker-c1599.firebaseapp.com",
+  projectId: "job-tracker-c1599",
+  storageBucket: "job-tracker-c1599.firebasestorage.app",
+  messagingSenderId: "10827059262",
+  appId: "1:10827059262:web:e054be64d36c2e1f06c16f"
+};
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const colRef = collection(db, "jobs");
+
+        // GLOBAL INTERFACE
+        window.toggleTheme = () => {
+            document.documentElement.classList.toggle('dark');
+            localStorage.theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+        };
+
+        window.openModal = (isEdit = false, id = null, data = null) => {
+            document.getElementById('modal').classList.remove('hidden');
+            const form = document.getElementById('job-form');
+            if(!isEdit) {
+                form.reset();
+                document.getElementById('edit-id').value = "";
+                document.getElementById('date').valueAsDate = new Date();
+            } else {
+                document.getElementById('edit-id').value = id;
+                document.getElementById('company').value = data.company;
+                document.getElementById('position').value = data.position;
+                document.getElementById('salary').value = data.salary;
+                document.getElementById('status').value = data.status;
+                document.getElementById('date').value = data.date;
+                document.getElementById('remark').value = data.remark || "";
+            }
+        };
+
+        window.closeModal = () => document.getElementById('modal').classList.add('hidden');
+
+        window.handleFormSubmit = async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('edit-id').value;
+            const data = {
+                company: document.getElementById('company').value,
+                position: document.getElementById('position').value,
+                salary: document.getElementById('salary').value,
+                status: document.getElementById('status').value,
+                date: document.getElementById('date').value,
+                remark: document.getElementById('remark').value,
+                updatedAt: Date.now()
+            };
+
+            if(id) await updateDoc(doc(db, "jobs", id), data);
+            else await addDoc(colRef, data);
+            closeModal();
+        };
+
+        window.deleteJob = async (id) => {
+            if(confirm("Permanently delete this application?")) await deleteDoc(doc(db, "jobs", id));
+        };
+
+        // REAL-TIME LISTENER
+        const q = query(colRef, orderBy("date", "desc"));
+        onSnapshot(q, (snapshot) => {
+            const list = document.getElementById('job-list');
+            list.innerHTML = "";
+            let count = 0, maxSal = 0;
+
+            snapshot.forEach((docSnap) => {
+                const job = docSnap.data();
+                const id = docSnap.id;
+                count++;
+                if(job.salary) maxSal = Math.max(maxSal, parseInt(job.salary));
+
+                const row = `
+                <tr class="hover:bg-notion-hover dark:hover:bg-notion-darkhover group transition-colors">
+                    <td class="px-4 py-3 border-r dark:border-notion-darkborder font-medium">📄 ${job.company}</td>
+                    <td class="px-4 py-3 border-r dark:border-notion-darkborder text-sm">${job.position}</td>
+                    <td class="px-4 py-3 border-r dark:border-notion-darkborder">
+                        <span class="px-2 py-0.5 rounded text-[11px] font-bold ${getStatusStyle(job.status)}">${job.status}</span>
+                    </td>
+                    <td class="px-4 py-3 border-r dark:border-notion-darkborder text-sm text-notion-gray">${job.date}</td>
+                    <td class="px-4 py-3 border-r dark:border-notion-darkborder text-sm font-mono">${job.salary ? '€' + parseInt(job.salary).toLocaleString() : '-'}</td>
+                    <td class="px-4 py-3 flex justify-between items-center group/row">
+                        <span class="px-2 py-0.5 rounded text-[11px] font-medium ${getRemarkStyle(job.remark)}">${job.remark || ''}</span>
+                        <div class="opacity-0 group-hover:opacity-100 flex gap-2">
+                            <button onclick='openModal(true, "${id}", ${JSON.stringify(job).replace(/'/g, "&apos;")})' class="text-notion-gray hover:text-blue-500">✏️</button>
+                            <button onclick='deleteJob("${id}")' class="text-notion-gray hover:text-red-500">🗑</button>
+                        </div>
+                    </td>
+                </tr>`;
+                list.innerHTML += row;
+            });
+            document.getElementById('footer-count').innerText = count;
+            document.getElementById('footer-max').innerText = '€' + maxSal.toLocaleString();
+        });
+
+        function getStatusStyle(s) {
+            const colors = {
+                'Applied': 'bg-blue-100 text-blue-700 dark:bg-blue-900/30',
+                'Interviewed': 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30',
+                'Offer': 'bg-purple-100 text-purple-700 dark:bg-purple-900/30',
+                'Rejected': 'bg-red-100 text-red-700 dark:bg-red-900/30'
+            };
+            return colors[s] || '';
+        }
+
+        function getRemarkStyle(r) {
+            if(r === 'Waiting') return 'bg-gray-100 text-gray-600 dark:bg-gray-800';
+            if(r === 'Declined') return 'bg-pink-100 text-pink-700 dark:bg-pink-900/30';
+            return '';
+        }
+
+        // PDF EXPORT
+        window.exportToPDF = () => {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('l', 'mm', 'a4');
+            const data = [];
+            document.querySelectorAll('#job-list tr').forEach(tr => {
+                const cells = tr.querySelectorAll('td');
+                data.push([cells[0].innerText, cells[1].innerText, cells[2].innerText, cells[3].innerText, cells[4].innerText, cells[5].innerText.replace('✏️🗑', '')]);
+            });
+            doc.autoTable({ head: [['Company', 'Position', 'Status', 'Date', 'Salary', 'Remark']], body: data });
+            doc.save('job-tracker-cloud.pdf');
+        };
+
+        if(localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        }
+    </script>
+</body>
+</html>
